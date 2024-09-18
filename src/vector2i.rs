@@ -8,6 +8,12 @@ pub struct Vector2i {
     pub y: i32,
 }
 
+impl Default for Vector2i {
+    fn default() -> Self {
+        Self { x: Default::default(), y: Default::default() }
+    }
+}
+
 impl Vector2i {
     pub const fn new(x: i32, y: i32) -> Self {
         Self { x, y }

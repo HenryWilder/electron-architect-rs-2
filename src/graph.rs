@@ -1,14 +1,16 @@
 use std::{cell::RefCell, rc::{Rc, Weak}};
 use node::{gate::Gate, Node};
+use quad_tree::InfiniteQuadTree;
 use raylib::{prelude::{Color, RaylibDraw, Rectangle, Vector2}};
 use wire::Wire;
 use crate::vector2i::Vector2i;
 
 pub mod node;
 pub mod wire;
+pub mod quad_tree;
 
 pub struct Graph {
-    nodes: Vec<Rc<RefCell<Node>>>,
+    nodes: InfiniteQuadTree<Node>,
 }
 
 impl Graph {
@@ -16,7 +18,7 @@ impl Graph {
 
     pub fn new() -> Self {
         Self {
-            nodes: Vec::new(),
+            nodes: InfiniteQuadTree::new(|node| node.position),
         }
     }
 
@@ -36,38 +38,54 @@ impl Graph {
         )
     }
 
+    /// Returns the top left corner of the cell
+    pub fn grid_to_world_centered(&self, cell: Vector2i) -> Vector2 {
+        Vector2::new(
+            (cell.x as f32 + 0.5) * Self::GRID_SIZE,
+            (cell.y as f32 + 0.5) * Self::GRID_SIZE,
+        )
+    }
+
+    pub fn node_world_centered(&self, node: &Rc<RefCell<Node>>) -> Vector2 {
+        self.grid_to_world_centered(node.borrow().position)
+    }
+
     fn reset_visited(&mut self) {
-        for node in &mut self.nodes {
-            node.borrow_mut().visited = false;
-        }
+        todo!();
+        // for node in &mut self.nodes {
+        //     node.borrow_mut().visited = false;
+        // }
     }
 
     pub fn evaluate_all(&mut self) {
-        for node in &mut self.nodes {
-            let state = node
-                .borrow()
-                .evaluate();
-        }
+        todo!();
+        // for node in &mut self.nodes {
+        //     let state = node
+        //         .borrow()
+        //         .evaluate();
+        // }
     }
 
     pub fn put_node(&mut self, gate: Gate, position: Vector2i) -> Weak<RefCell<Node>> {
-        let new_node = Node::new(gate, position);
-        let node_rc = Rc::new(RefCell::new(new_node));
-        self.nodes.push(node_rc);
-        if let Some(node_ref) = self.nodes.iter().last() {
-            Rc::downgrade(node_ref)
-        } else {
-            Weak::new()
-        }
+        todo!();
+        // let new_node = Node::new(gate, position);
+        // let node_rc = Rc::new(RefCell::new(new_node));
+        // self.nodes.push(node_rc);
+        // if let Some(node_ref) = self.nodes.iter().last() {
+        //     Rc::downgrade(node_ref)
+        // } else {
+        //     Weak::new()
+        // }
     }
 
     pub fn find_node_at(&self, position: Vector2i) -> Option<Weak<RefCell<Node>>> {
-        self.nodes
-            .iter()
-            .find_map(|node|
-                (node.borrow().position == position)
-                    .then(|| Rc::downgrade(node))
-            )
+        todo!();
+        // self.nodes
+        //     .iter()
+        //     .find_map(|node|
+        //         (node.borrow().position == position)
+        //             .then(|| Rc::downgrade(node))
+        //     )
     }
 
     /// Wires cannot be created from nodes already known to be dropped.
@@ -80,36 +98,39 @@ impl Graph {
     }
 
     pub fn draw_wires(&self, d: &mut impl RaylibDraw) {
-        for node in self.nodes.iter() {
-            let node = node.borrow();
-            let node_position = self.grid_to_world(node.position);
-            for wire in node.inputs.iter() {
-                if let Some(input) = wire.input.upgrade() {
-                    let input = input.borrow();
-                    let input_position = self.grid_to_world(input.position);
+        todo!();
+        // for node in self.nodes.iter() {
+        //     let node = node.borrow();
+        //     let node_position = self.grid_to_world_centered(node.position);
+        //     for wire in node.inputs.iter() {
+        //         if let Some(input) = wire.input.upgrade() {
+        //             let input = input.borrow();
+        //             let input_position = self.grid_to_world_centered(input.position);
 
-                    let mut points = Vec::with_capacity(wire.elbows.len() + 2);
-                    points.push(input_position);
-                    points.extend(wire.elbows.iter().map(|&p| self.grid_to_world(p)));
-                    points.push(node_position);
-                    d.draw_line_strip(points.as_slice(), Color::WHITE);
-                }
-            }
-        }
+        //             let mut points = Vec::with_capacity(wire.elbows.len() + 2);
+        //             points.push(input_position);
+        //             points.extend(wire.elbows.iter().map(|&p| self.grid_to_world_centered(p)));
+        //             points.push(node_position);
+        //             d.draw_line_strip(points.as_slice(), Color::WHITE);
+        //         }
+        //     }
+        // }
     }
 
     pub fn draw_nodes(&self, d: &mut impl RaylibDraw) {
-        for node in self.nodes.iter() {
-            let Vector2 { x, y } = self.grid_to_world(node.borrow().position);
-            d.draw_rectangle_rec(Rectangle::new(x, y, Self::GRID_SIZE, Self::GRID_SIZE), Color::WHITE);
-        }
+        todo!();
+        // for node in self.nodes.iter() {
+        //     let Vector2 { x, y } = self.grid_to_world(node.borrow().position);
+        //     d.draw_rectangle_rec(Rectangle::new(x, y, Self::GRID_SIZE, Self::GRID_SIZE), Color::WHITE);
+        // }
     }
 
     pub fn draw_proxy_nodes(&self, d: &mut impl RaylibDraw) {
-        for node in self.nodes.iter() {
-            let Vector2 { x, y } = self.grid_to_world(node.borrow().position);
-            d.draw_rectangle_rec(Rectangle::new(x, y, Self::GRID_SIZE, Self::GRID_SIZE), Color::WHITE);
-        }
+        todo!();
+        // for node in self.nodes.iter() {
+        //     let Vector2 { x, y } = self.grid_to_world(node.borrow().position);
+        //     d.draw_rectangle_rec(Rectangle::new(x, y, Self::GRID_SIZE, Self::GRID_SIZE), Color::WHITE);
+        // }
     }
 }
 
