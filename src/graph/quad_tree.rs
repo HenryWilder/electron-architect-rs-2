@@ -1,6 +1,5 @@
-use std::{cell::RefCell, cmp::Ordering, ops::Index, rc::Rc};
-
 use crate::vector2i::Vector2i;
+use super::node::Node;
 
 pub trait Positioned {
     fn position(&self) -> &Vector2i;
@@ -100,23 +99,15 @@ pub struct InfiniteQuadTree<T: Positioned> {
     content: QuadTreeInner<T>,
 }
 
-use Ordering::*;
-
-use super::node::Node;
-
 impl<T: Positioned> InfiniteQuadTree<T> {
     const RESTRUCTURE_THRESHOLD: usize = 4;
 
     pub fn new() -> Self {
-        Self {
-            content: QuadTreeInner::default(),
-        }
+        Self { content: QuadTreeInner::default(), }
     }
 
     pub fn new_from(item: T) -> Self {
-        Self {
-            content: QuadTreeInner::Value(Vec::from([item]))
-        }
+        Self { content: QuadTreeInner::Value(Vec::from([item])) }
     }
 
     /// Returns whatever item was already there; `None` if the position was free.
