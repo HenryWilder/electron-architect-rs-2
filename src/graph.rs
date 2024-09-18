@@ -18,7 +18,7 @@ impl Graph {
 
     pub fn new() -> Self {
         Self {
-            nodes: InfiniteQuadTree::new(|node| node.position),
+            nodes: InfiniteQuadTree::new(),
         }
     }
 
