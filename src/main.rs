@@ -34,7 +34,11 @@ fn main() {
         let mouse_cell = graph.world_to_grid(mouse_pos);
 
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_RIGHT) {
-            current_node = None;
+            if current_node.is_some() {
+                current_node = None;
+            } else if let Some(hovered) = graph.find_node_at(mouse_cell) {
+                todo!("remove node from graph");
+            }
         }
 
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_BUTTON_LEFT) {

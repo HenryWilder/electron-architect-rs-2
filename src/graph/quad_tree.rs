@@ -4,18 +4,18 @@ use crate::vector2i::Vector2i;
 use super::node::Node;
 
 pub trait Positioned {
-    fn position(&self) -> &Vector2i;
+    fn position(&self) -> Vector2i;
 }
 
 impl Positioned for Node {
-    fn position(&self) -> &Vector2i {
-        &self.position
+    fn position(&self) -> Vector2i {
+        self.position
     }
 }
 
 impl Positioned for Vector2i {
-    fn position(&self) -> &Vector2i {
-        self
+    fn position(&self) -> Vector2i {
+        *self
     }
 }
 
@@ -49,7 +49,7 @@ impl<T: Positioned> QuadTreeBranch<T> {
     }
 
     pub fn insert(&mut self, item: T) -> Option<T> {
-        let branch = self.branch_mut(item.position());
+        let branch = self.branch_mut(&item.position());
         if let Some(subtree) = branch {
             subtree.insert(item)
         } else {
@@ -81,7 +81,7 @@ impl<T: Positioned> QuadTreeInner<T> {
         match self {
             Self::Value(vec) => {
                 for item in vec {
-                    let Vector2i{ x, y } = *item.position();
+                    let Vector2i{ x, y } = item.position();
                     min_x = min_x.min(x);
                     min_y = min_y.min(y);
                     max_x = max_x.max(x);
@@ -176,7 +176,7 @@ impl<T: Positioned> InfiniteQuadTree<T> {
         match &self.content {
             QuadTreeInner::Value(vec) => vec
                 .iter()
-                .find(|item| item.position() == &position),
+                .find(|item| item.position() == position),
 
             QuadTreeInner::Subtree(subtree) => subtree
                 .branch(&position)
@@ -328,7 +328,7 @@ mod tests {
                 c.draw_rectangle(-1000, 0, 2000, 1, Color::WHITE);
                 let mut it = tree.iter();
                 while let Some(item) = debug_next(&mut it, &mut c) {
-                    let &Vector2i { x, y } = item.position();
+                    let Vector2i { x, y } = item.position();
                     c.draw_pixel(x, y, Color::ORANGE);
                 }
             }
