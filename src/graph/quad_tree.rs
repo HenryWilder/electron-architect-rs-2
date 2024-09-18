@@ -134,7 +134,7 @@ pub struct InfiniteQuadTree<T: Positioned> {
 }
 
 impl<T: Positioned> InfiniteQuadTree<T> {
-    const RESTRUCTURE_THRESHOLD: usize = 4;
+    const RESTRUCTURE_THRESHOLD: usize = 8;
 
     pub fn new() -> Self {
         Self { content: QuadTreeInner::default(), }

@@ -37,7 +37,7 @@ fn main() {
             if current_node.is_some() {
                 current_node = None;
             } else if let Some(hovered) = graph.find_node_at(mouse_cell) {
-                todo!("remove node from graph");
+                println!("todo: remove node from graph");
             }
         }
 
