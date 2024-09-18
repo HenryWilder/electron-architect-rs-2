@@ -54,15 +54,6 @@ impl<T: Positioned> QuadTreeBranch<T> {
             None
         }
     }
-
-    // pub fn iter(&self) -> impl Iterator<Item = &T> {
-    //     self.branches
-    //         .iter()
-    //         .flat_map(|branch| branch
-    //             .as_ref()
-    //             .and_then(|tree| Some(tree.iter())))
-    //         .flatten()
-    // }
 }
 
 #[derive(Debug)]
@@ -166,39 +157,63 @@ impl<T: Positioned> InfiniteQuadTree<T> {
     }
 }
 
+use std::collections::LinkedList;
+
 pub struct Iter<'a, T: 'a + Positioned> {
-    stack: Vec<(&'a InfiniteQuadTree<T>, usize)>,
+    stack: LinkedList<(&'a QuadTreeInner<T>, usize)>,
 }
 
-impl<'a, T: Positioned> Iterator for Iter<'a, T> {
+impl<'a, T: Positioned> Iter<'a, T> {
+    fn new(root: &'a QuadTreeInner<T>) -> Self {
+        Self {
+            stack: LinkedList::from([(root, 0)])
+        }
+    }
+}
+
+impl<'a, T: Positioned + std::fmt::Debug> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(top) = self.stack.last_mut() {
-            let (tree, mut index) = top;
-            match &tree.content {
+        let stack = &mut self.stack;
+        if let Some(top) = stack.front() {
+            let (tree, index) = top;
+            match tree {
                 QuadTreeInner::Value(vec) => {
-                    if index < vec.len() {
-                        Some(&vec[index])
+                    let current_index = *index;
+                    // println!(": iterating over values, currently index {current_index}");
+                    if current_index < vec.len() {
+                        // println!(":   {current_index} is a valid value index");
+                        stack.front_mut().unwrap().1 += 1; // increment index
+                        let item = &vec[current_index];
+                        // println!(":   the item is {item:#?}");
+                        Some(item)
                     } else {
-                        self.stack.pop();
-                        if let Some((_, index)) = self.stack.last_mut() {
-                            *index += 1;
-                            self.next()
-                        } else {
-                            None
-                        }
+                        // println!(":   {current_index} exceeds value bounds, popping to previous layer");
+                        stack.pop_front();
+                        self.next()
                     }
                 },
+
                 QuadTreeInner::Subtree(subtree) => {
-                    if let Some(branch) = subtree.branches[index].as_ref() {
-                        self.stack.push((branch, 0));
+                    let current_index = *index;
+                    // println!(": iterating over subtree, currently branch {current_index}");
+                    if current_index < 4 {
+                        // println!(":   {current_index} is a valid branch index");
+                        stack.front_mut().unwrap().1 += 1; // increment index
+                        if let Some(branch) = subtree.branches[current_index].as_ref() {
+                            stack.push_front((&branch.content, 0));
+                        }
+                        self.next()
+                    } else {
+                        // println!(":   {current_index} exceeds branch bounds, popping to previous layer");
+                        stack.pop_front();
+                        self.next()
                     }
-                    index += 1;
-                    self.next()
                 },
             }
         } else {
+            // println!(": all popped, nothing to iterate to");
             None
         }
     }
@@ -206,9 +221,7 @@ impl<'a, T: Positioned> Iterator for Iter<'a, T> {
 
 impl<T: Positioned> InfiniteQuadTree<T> {
     pub fn iter(&self) -> Iter<'_, T> {
-        Iter {
-            stack: Vec::from([(self, 0)]),
-        }
+        Iter::new(&self.content)
     }
 }
 
@@ -246,12 +259,27 @@ mod tests {
             .title("test")
             .build();
 
+        rl.set_target_fps(60);
+
+        let mut camera = Camera2D {
+            offset: Vector2::default(),
+            target: Vector2::default(),
+            rotation: 0.0,
+            zoom: 1.0,
+        };
+
+        const SPEED: f32 = 2.0;
         while !rl.window_should_close() {
+            camera.target.x += (rl.is_key_down(KeyboardKey::KEY_RIGHT) as isize as f32 - rl.is_key_down(KeyboardKey::KEY_LEFT) as isize as f32) * SPEED;
+            camera.target.y += (rl.is_key_down(KeyboardKey::KEY_DOWN ) as isize as f32 - rl.is_key_down(KeyboardKey::KEY_UP  ) as isize as f32) * SPEED;
             let mut d = rl.begin_drawing(&thread);
             d.clear_background(Color::BLACK);
-            for item in tree.iter() {
-                let &Vector2i { x, y } = item.position();
-                d.draw_pixel(x, y, Color::BLUE);
+            {
+                let mut c = d.begin_mode2D(camera);
+                for item in tree.iter() {
+                    let &Vector2i { x, y } = item.position();
+                    c.draw_pixel(x, y, Color::WHITE);
+                }
             }
         }
     }
