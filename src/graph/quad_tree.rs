@@ -1,3 +1,5 @@
+use raylib::prelude::RaylibDrawHandle;
+
 use crate::vector2i::Vector2i;
 use super::node::Node;
 
@@ -17,11 +19,13 @@ impl Positioned for Vector2i {
     }
 }
 
+const QUAD_TREE_BRANCH_COUNT: usize = 4;
+
 #[derive(Debug)]
 struct QuadTreeBranch<T: Positioned> {
     center: Vector2i,
     /// Rows then cols
-    branches: Box<[Option<InfiniteQuadTree<T>>; 4]>
+    branches: Box<[Option<InfiniteQuadTree<T>>; QUAD_TREE_BRANCH_COUNT]>
 }
 
 impl<T: Positioned> QuadTreeBranch<T> {
@@ -69,7 +73,36 @@ impl<T: Positioned> Default for QuadTreeInner<T> {
 }
 
 impl<T: Positioned> QuadTreeInner<T> {
+    pub fn region_bounds(&self) -> (Vector2i, Vector2i) {
+        let mut min_x = i32::MAX;
+        let mut min_y = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut max_y = i32::MIN;
+        match self {
+            Self::Value(vec) => {
+                for item in vec {
+                    let Vector2i{ x, y } = *item.position();
+                    min_x = min_x.min(x);
+                    min_y = min_y.min(y);
+                    max_x = max_x.max(x);
+                    max_y = max_y.max(y);
+                }
+            },
+            Self::Subtree(subtree) => {
+                for branch in subtree.branches.iter().flatten() {
+                    let (Vector2i{ x: min_x_1, y: min_y_1 }, Vector2i{ x: max_x_1, y: max_y_1 }) = branch.content.region_bounds();
+                    min_x = min_x.min(min_x_1);
+                    min_y = min_y.min(min_y_1);
+                    max_x = max_x.max(max_x_1);
+                    max_y = max_y.max(max_y_1);
+                }
+            },
+        }
+        (Vector2i::new(min_x, min_y), Vector2i::new(max_x, max_y))
+    }
+
     pub fn restructure(&mut self) {
+        println!("restructuring");
         if let Self::Value(vec) = std::mem::replace(self, Self::Subtree(QuadTreeBranch::new())) {
             if let Self::Subtree(subtree) = self {
                 {
@@ -163,57 +196,33 @@ pub struct Iter<'a, T: 'a + Positioned> {
     stack: LinkedList<(&'a QuadTreeInner<T>, usize)>,
 }
 
-impl<'a, T: Positioned> Iter<'a, T> {
-    fn new(root: &'a QuadTreeInner<T>) -> Self {
-        Self {
-            stack: LinkedList::from([(root, 0)])
-        }
-    }
-}
-
-impl<'a, T: Positioned + std::fmt::Debug> Iterator for Iter<'a, T> {
+impl<'a, T: Positioned> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let stack = &mut self.stack;
-        if let Some(top) = stack.front() {
-            let (tree, index) = top;
-            match tree {
-                QuadTreeInner::Value(vec) => {
-                    let current_index = *index;
-                    // println!(": iterating over values, currently index {current_index}");
-                    if current_index < vec.len() {
-                        // println!(":   {current_index} is a valid value index");
-                        stack.front_mut().unwrap().1 += 1; // increment index
-                        let item = &vec[current_index];
-                        // println!(":   the item is {item:#?}");
-                        Some(item)
-                    } else {
-                        // println!(":   {current_index} exceeds value bounds, popping to previous layer");
-                        stack.pop_front();
-                        self.next()
-                    }
-                },
+        use QuadTreeInner::*;
+        if let Some((tree, index)) = self.stack.front_mut() {
+            let tree = *tree;
+            let current_index = *index;
+            *index += 1;
+            let len = match tree {
+                Value(vec) => vec.len(),
+                Subtree(_) => QUAD_TREE_BRANCH_COUNT,
+            };
+            if current_index < len {
+                match tree {
+                    Value(vec) => return Some(&vec[current_index]),
 
-                QuadTreeInner::Subtree(subtree) => {
-                    let current_index = *index;
-                    // println!(": iterating over subtree, currently branch {current_index}");
-                    if current_index < 4 {
-                        // println!(":   {current_index} is a valid branch index");
-                        stack.front_mut().unwrap().1 += 1; // increment index
-                        if let Some(branch) = subtree.branches[current_index].as_ref() {
-                            stack.push_front((&branch.content, 0));
-                        }
-                        self.next()
-                    } else {
-                        // println!(":   {current_index} exceeds branch bounds, popping to previous layer");
-                        stack.pop_front();
-                        self.next()
-                    }
-                },
+                    Subtree(QuadTreeBranch { center, branches }) =>
+                        if let Some(branch) = branches[current_index].as_ref() {
+                            self.stack.push_front((&branch.content, 0));
+                        },
+                }
+            } else {
+                self.stack.pop_front();
             }
+            self.next()
         } else {
-            // println!(": all popped, nothing to iterate to");
             None
         }
     }
@@ -221,35 +230,74 @@ impl<'a, T: Positioned + std::fmt::Debug> Iterator for Iter<'a, T> {
 
 impl<T: Positioned> InfiniteQuadTree<T> {
     pub fn iter(&self) -> Iter<'_, T> {
-        Iter::new(&self.content)
+        Iter {
+            stack: LinkedList::from([(&self.content, 0)]),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::prelude::*;
     use raylib::prelude::*;
+
+    fn debug_next<'a, T: Positioned>(it: &mut Iter<'a, T>, d: &mut impl RaylibDraw) -> Option<&'a T> {
+        use QuadTreeInner::*;
+        if let Some((tree, index)) = it.stack.front_mut() {
+            let tree = *tree;
+            let current_index = *index;
+            *index += 1;
+            let len = match tree {
+                Value(vec) => vec.len(),
+                Subtree(_) => QUAD_TREE_BRANCH_COUNT,
+            };
+            let (Vector2i { x: xmin, y: ymin }, Vector2i { x: xmax, y: ymax }) = tree.region_bounds();
+            let (width, height) = (xmax - xmin, ymax - ymin);
+            d.draw_rectangle_lines(xmin, ymin, width, height, Color::GREENYELLOW);
+            if current_index < len {
+                match tree {
+                    Value(vec) => return Some(&vec[current_index]),
+
+                    Subtree(QuadTreeBranch { center, branches }) => {
+                        d.draw_rectangle(center.x, ymin, 1, height, Color::BLUE);
+                        d.draw_rectangle(xmin, center.y, width, 1, Color::BLUE);
+                        if let Some(branch) = branches[current_index].as_ref() {
+                            it.stack.push_front((&branch.content, 0));
+                        }
+                    },
+                }
+            } else {
+                it.stack.pop_front();
+            }
+            debug_next(it, d)
+        } else {
+            None
+        }
+    }
 
     #[test]
     fn test() {
-        const POINTS: [Vector2i; 6] = [
-            Vector2i::new(5, 5),
-            Vector2i::new(-6, 3),
-            Vector2i::new(92, 46),
-            Vector2i::new(32, 46),
-            Vector2i::new(55, 12),
-            Vector2i::new(-29, 14),
-        ];
+        const NUM_POINTS: usize = 100;
+        let mut points: Vec<Vector2i> = Vec::with_capacity(NUM_POINTS);
+        let mut r = rand::thread_rng();
+        for i in 0..NUM_POINTS {
+            points.push(Vector2i::new(
+                r.gen_range(-256..=256),
+                r.gen_range(-256..=256),
+            ));
+        }
+        let points = points;
 
         let mut tree = InfiniteQuadTree::new();
-        for p in POINTS {
-            tree.insert(p);
+        for p in points.iter() {
+            tree.insert(*p);
         }
-        println!("{tree:#?}");
+        // println!("{tree:#?}");
 
-        for p in POINTS {
-            let found = tree.at(p).expect("should find exact position");
-            assert_eq!(found, &p, "exact position should match");
+        for p in points.iter() {
+            let found = tree.at(*p).expect("should find exact position");
+            assert_eq!(found, p, "exact position should match");
         }
 
         let tree = &tree;
@@ -276,9 +324,12 @@ mod tests {
             d.clear_background(Color::BLACK);
             {
                 let mut c = d.begin_mode2D(camera);
-                for item in tree.iter() {
+                c.draw_rectangle(0, -1000, 1, 2000, Color::WHITE);
+                c.draw_rectangle(-1000, 0, 2000, 1, Color::WHITE);
+                let mut it = tree.iter();
+                while let Some(item) = debug_next(&mut it, &mut c) {
                     let &Vector2i { x, y } = item.position();
-                    c.draw_pixel(x, y, Color::WHITE);
+                    c.draw_pixel(x, y, Color::ORANGE);
                 }
             }
         }
