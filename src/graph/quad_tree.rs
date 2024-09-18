@@ -54,6 +54,15 @@ impl<T: Positioned> QuadTreeBranch<T> {
             None
         }
     }
+
+    // pub fn iter(&self) -> impl Iterator<Item = &T> {
+    //     self.branches
+    //         .iter()
+    //         .flat_map(|branch| branch
+    //             .as_ref()
+    //             .and_then(|tree| Some(tree.iter())))
+    //         .flatten()
+    // }
 }
 
 #[derive(Debug)]
@@ -78,8 +87,9 @@ impl<T: Positioned> QuadTreeInner<T> {
                         center_x += position.x;
                         center_y += position.y;
                     }
-                    center_x /= vec.len() as i32;
-                    center_y /= vec.len() as i32;
+                    let n = vec.len() as i32;
+                    center_x /= n;
+                    center_y /= n;
                     subtree.center = Vector2i::new(center_x, center_y);
                 }
                 for item in vec {
@@ -156,9 +166,56 @@ impl<T: Positioned> InfiniteQuadTree<T> {
     }
 }
 
+pub struct Iter<'a, T: 'a + Positioned> {
+    stack: Vec<(&'a InfiniteQuadTree<T>, usize)>,
+}
+
+impl<'a, T: Positioned> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(top) = self.stack.last_mut() {
+            let (tree, mut index) = top;
+            match &tree.content {
+                QuadTreeInner::Value(vec) => {
+                    if index < vec.len() {
+                        Some(&vec[index])
+                    } else {
+                        self.stack.pop();
+                        if let Some((_, index)) = self.stack.last_mut() {
+                            *index += 1;
+                            self.next()
+                        } else {
+                            None
+                        }
+                    }
+                },
+                QuadTreeInner::Subtree(subtree) => {
+                    if let Some(branch) = subtree.branches[index].as_ref() {
+                        self.stack.push((branch, 0));
+                    }
+                    index += 1;
+                    self.next()
+                },
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: Positioned> InfiniteQuadTree<T> {
+    pub fn iter(&self) -> Iter<'_, T> {
+        Iter {
+            stack: Vec::from([(self, 0)]),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use raylib::prelude::*;
 
     #[test]
     fn test() {
@@ -180,6 +237,22 @@ mod tests {
         for p in POINTS {
             let found = tree.at(p).expect("should find exact position");
             assert_eq!(found, &p, "exact position should match");
+        }
+
+        let tree = &tree;
+
+        let (mut rl, thread) = init()
+            .size(640, 480)
+            .title("test")
+            .build();
+
+        while !rl.window_should_close() {
+            let mut d = rl.begin_drawing(&thread);
+            d.clear_background(Color::BLACK);
+            for item in tree.iter() {
+                let &Vector2i { x, y } = item.position();
+                d.draw_pixel(x, y, Color::BLUE);
+            }
         }
     }
 }
